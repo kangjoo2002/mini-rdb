@@ -37,6 +37,17 @@ class SchemaTest {
     }
 
     @Test
+    void rejectsDuplicateColumnName() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new Schema(java.util.List.of(
+                        new Column("id", new ColumnType.IntType(), false),
+                        new Column("id", new ColumnType.VarcharType(32), false)
+                ))
+        );
+    }
+
+    @Test
     void rejectsBlankColumnName() {
         assertThrows(
                 IllegalArgumentException.class,

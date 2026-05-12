@@ -1,7 +1,9 @@
 package dev.minirdb.table;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * 행이 어떤 컬럼들로 구성되는지 설명한다.
@@ -17,6 +19,14 @@ public final class Schema {
 
         if (columns.isEmpty()) {
             throw new IllegalArgumentException("schema must have at least one column");
+        }
+
+        Set<String> columnNames = new HashSet<>();
+
+        for (Column column : columns) {
+            if (!columnNames.add(column.name())) {
+                throw new IllegalArgumentException("duplicate column name: " + column.name());
+            }
         }
 
         this.columns = List.copyOf(columns);
