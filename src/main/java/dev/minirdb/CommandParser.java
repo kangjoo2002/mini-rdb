@@ -1,16 +1,13 @@
 package dev.minirdb;
 
 import dev.minirdb.table.Row;
+import dev.minirdb.table.Value;
 
 /**
  * 사용자가 입력한 문자열을 Command로 바꾼다.
- *
- * 이 클래스의 책임은 "실행"이 아니라 "해석"이다.
- * 예를 들어 insert 명령을 실제로 테이블에 넣는 일은 Main이 한다.
  */
 public final class CommandParser {
     private CommandParser() {
-        // 객체를 만들 필요가 없는 클래스다.
     }
 
     public static Command parse(String input) throws ParseCommandException {
@@ -50,6 +47,10 @@ public final class CommandParser {
         }
 
         String name = parts[2];
-        return new Command.Insert(new Row(id, name));
+
+        return new Command.Insert(Row.of(
+                new Value.IntValue(id),
+                new Value.VarcharValue(name)
+        ));
     }
 }

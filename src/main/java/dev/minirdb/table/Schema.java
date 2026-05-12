@@ -7,9 +7,6 @@ import java.util.Set;
 
 /**
  * 행이 어떤 컬럼들로 구성되는지 설명한다.
- *
- * 아직 CREATE TABLE은 없으므로,
- * 현재 프로젝트의 기본 행 형식은 userSchema로 고정한다.
  */
 public final class Schema {
     private final List<Column> columns;
@@ -24,19 +21,14 @@ public final class Schema {
         Set<String> columnNames = new HashSet<>();
 
         for (Column column : columns) {
+            Objects.requireNonNull(column, "column must not be null");
+
             if (!columnNames.add(column.name())) {
                 throw new IllegalArgumentException("duplicate column name: " + column.name());
             }
         }
 
         this.columns = List.copyOf(columns);
-    }
-
-    public static Schema userSchema() {
-        return new Schema(List.of(
-                new Column("id", new ColumnType.IntType(), false),
-                new Column("name", new ColumnType.VarcharType(32), false)
-        ));
     }
 
     public List<Column> columns() {
