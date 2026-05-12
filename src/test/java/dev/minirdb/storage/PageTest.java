@@ -8,6 +8,7 @@ import dev.minirdb.table.Value;
 import org.junit.jupiter.api.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -78,6 +79,42 @@ class PageTest {
         byte[] bytes = page.toBytes();
 
         assertEquals(2, ByteBuffer.wrap(bytes, 0, 4).getInt());
+    }
+
+    @Test
+    void serializesFirstRowAfterHeader() {
+        Schema schema = schema();
+        Page page = new Page(schema);
+
+        Row row = row(1, "kim");
+        page.append(row);
+
+        byte[] bytes = page.toBytes();
+        byte[] expectedRowBytes = dev.minirdb.table.RowSerializer.serialize(schema, row);
+        byte[] actualRowBytes = Arrays.copyOfRange(
+                bytes,
+                Integer.BYTES,
+                Integer.BYTES + expectedRowBytes.length
+        );
+
+        org.junit.jupiter.api.Assertions.assertArrayEquals(expectedRowBytes, actualRowBytes);
+    }
+
+    @Test
+    void rejectsRowThatDoesNotMatchSchema() {
+        Page page = new Page(schema());
+
+        Row invalidRow = Row.of(
+                new Value.VarcharValue("wrong"),
+                new Value.VarcharValue("kim")
+        );
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> page.append(invalidRow)
+        );
+
+        assertEquals(0, page.rowCount());
     }
 
     @Test

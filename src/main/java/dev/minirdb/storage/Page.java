@@ -47,6 +47,10 @@ public final class Page {
             throw new IllegalStateException("page is full");
         }
 
+        // Page는 스키마에 맞는 Row만 내부 상태로 받아야 한다.
+        // 직렬화 가능 여부를 먼저 확인해서 잘못된 Row가 Page에 들어오는 것을 막는다.
+        RowSerializer.serialize(schema, row);
+
         rows.add(row);
     }
 
