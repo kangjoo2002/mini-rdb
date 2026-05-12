@@ -71,4 +71,30 @@ class TableTest {
                 ))
         );
     }
+
+    @Test
+    void rejectsVarcharValueLongerThanColumnMaxLength() {
+        Table table = new Table(schema());
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> table.insert(Row.of(
+                        new Value.IntValue(1),
+                        new Value.VarcharValue("a".repeat(33))
+                ))
+        );
+    }
+
+    @Test
+    void validatesVarcharLengthByUtf8Bytes() {
+        Table table = new Table(schema());
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> table.insert(Row.of(
+                        new Value.IntValue(1),
+                        new Value.VarcharValue("가".repeat(11))
+                ))
+        );
+    }
 }

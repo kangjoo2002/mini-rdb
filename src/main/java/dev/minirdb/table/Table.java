@@ -1,5 +1,6 @@
 package dev.minirdb.table;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -28,12 +29,10 @@ public final class Table {
         }
 
         for (int i = 0; i < schema.size(); i++) {
-            ColumnType columnType = schema.column(i).type();
+            Column column = schema.column(i);
             Value value = row.value(i);
 
-            if (!matches(columnType, value)) {
-                throw new IllegalArgumentException("row value type does not match column type: " + schema.column(i).name());
-            }
+            validateValue(column, value);
         }
 
         rows.add(row);
@@ -43,15 +42,31 @@ public final class Table {
         return Collections.unmodifiableList(rows);
     }
 
-    private boolean matches(ColumnType columnType, Value value) {
+    private void validateValue(Column column, Value value) {
+        ColumnType columnType = column.type();
+
         if (columnType instanceof ColumnType.IntType) {
-            return value instanceof Value.IntValue;
+            if (!(value instanceof Value.IntValue)) {
+                throw new IllegalArgumentException("row value type does not match column type: " + column.name());
+            }
+
+            return;
         }
 
-        if (columnType instanceof ColumnType.VarcharType) {
-            return value instanceof Value.VarcharValue;
+        if (columnType instanceof ColumnType.VarcharType varcharType) {
+            if (!(value instanceof Value.VarcharValue varcharValue)) {
+                throw new IllegalArgumentException("row value type does not match column type: " + column.name());
+            }
+
+            int byteLength = varcharValue.value().getBytes(StandardCharsets.UTF_8).length;
+
+            if (byteLength > varcharType.maxLength()) {
+                throw new IllegalArgumentException("varchar value is too long for column: " + column.name());
+            }
+
+            return;
         }
 
-        return false;
+        throw new IllegalArgumentException("unsupported column type: " + column.name());
     }
 }
