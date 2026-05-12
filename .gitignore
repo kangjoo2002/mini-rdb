@@ -4,3 +4,4 @@ out/
 *.class
 .idea/
 .vscode/
+mini-rdb.data

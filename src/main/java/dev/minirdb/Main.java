@@ -1,5 +1,6 @@
 package dev.minirdb;
 
+import dev.minirdb.storage.RowFile;
 import dev.minirdb.table.Column;
 import dev.minirdb.table.ColumnType;
 import dev.minirdb.table.Row;
@@ -10,6 +11,7 @@ import dev.minirdb.table.Value;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Path;
 import java.util.List;
 
 public class Main {
@@ -19,7 +21,13 @@ public class Main {
                 new Column("name", new ColumnType.VarcharType(32), false)
         ));
 
+        RowFile rowFile = new RowFile(Path.of("mini-rdb.data"), schema);
         Table table = new Table(schema);
+
+        for (Row row : rowFile.readAll()) {
+            table.insert(row);
+        }
+
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
         while (true) {
@@ -51,6 +59,7 @@ public class Main {
 
                 if (command instanceof Command.Insert insert) {
                     table.insert(insert.row());
+                    rowFile.append(insert.row());
                     System.out.println("ok");
                     continue;
                 }
