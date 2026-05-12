@@ -12,6 +12,10 @@ public sealed interface Value permits Value.IntValue, Value.VarcharValue {
     record VarcharValue(String value) implements Value {
         public VarcharValue {
             Objects.requireNonNull(value, "value must not be null");
+
+            if (value.indexOf('\0') >= 0) {
+                throw new IllegalArgumentException("varchar value must not contain NUL character");
+            }
         }
     }
 }
