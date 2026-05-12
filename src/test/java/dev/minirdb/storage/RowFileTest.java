@@ -27,6 +27,22 @@ class RowFileTest {
     }
 
     @Test
+    void rejectsNullPath() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new RowFile(null, schema())
+        );
+    }
+
+    @Test
+    void rejectsNullSchema() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new RowFile(tempDir.resolve("rows.data"), null)
+        );
+    }
+
+    @Test
     void readsEmptyListWhenFileDoesNotExist() throws Exception {
         RowFile rowFile = new RowFile(tempDir.resolve("rows.data"), schema());
 

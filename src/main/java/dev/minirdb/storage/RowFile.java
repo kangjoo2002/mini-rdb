@@ -26,8 +26,8 @@ public final class RowFile {
     private final Schema schema;
 
     public RowFile(Path path, Schema schema) {
-        this.path = path;
-        this.schema = schema;
+        this.path = java.util.Objects.requireNonNull(path, "path must not be null");
+        this.schema = java.util.Objects.requireNonNull(schema, "schema must not be null");
     }
 
     public void append(Row row) throws IOException {
