@@ -7,8 +7,6 @@ import java.util.Objects;
 
 /**
  * 행 여러 개를 메모리에 저장하는 테이블이다.
- *
- * 아직 파일 저장소는 없으므로 프로그램을 종료하면 데이터는 사라진다.
  */
 public final class Table {
     private final Schema schema;
@@ -18,19 +16,42 @@ public final class Table {
         this.schema = Objects.requireNonNull(schema, "schema must not be null");
     }
 
-    public static Table userTable() {
-        return new Table(Schema.userSchema());
-    }
-
     public Schema schema() {
         return schema;
     }
 
     public void insert(Row row) {
-        rows.add(Objects.requireNonNull(row, "row must not be null"));
+        Objects.requireNonNull(row, "row must not be null");
+
+        if (row.size() != schema.size()) {
+            throw new IllegalArgumentException("row value count does not match schema");
+        }
+
+        for (int i = 0; i < schema.size(); i++) {
+            ColumnType columnType = schema.column(i).type();
+            Value value = row.value(i);
+
+            if (!matches(columnType, value)) {
+                throw new IllegalArgumentException("row value type does not match column type: " + schema.column(i).name());
+            }
+        }
+
+        rows.add(row);
     }
 
     public List<Row> rows() {
         return Collections.unmodifiableList(rows);
+    }
+
+    private boolean matches(ColumnType columnType, Value value) {
+        if (columnType instanceof ColumnType.IntType) {
+            return value instanceof Value.IntValue;
+        }
+
+        if (columnType instanceof ColumnType.VarcharType) {
+            return value instanceof Value.VarcharValue;
+        }
+
+        return false;
     }
 }

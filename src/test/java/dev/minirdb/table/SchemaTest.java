@@ -2,14 +2,19 @@ package dev.minirdb.table;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SchemaTest {
     @Test
-    void createsUserSchema() {
-        Schema schema = Schema.userSchema();
+    void createsSchema() {
+        Schema schema = new Schema(List.of(
+                new Column("id", new ColumnType.IntType(), false),
+                new Column("name", new ColumnType.VarcharType(32), false)
+        ));
 
         assertEquals(2, schema.size());
 
@@ -32,7 +37,7 @@ class SchemaTest {
     void rejectsEmptySchema() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new Schema(java.util.List.of())
+                () -> new Schema(List.of())
         );
     }
 
@@ -40,7 +45,7 @@ class SchemaTest {
     void rejectsDuplicateColumnName() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new Schema(java.util.List.of(
+                () -> new Schema(List.of(
                         new Column("id", new ColumnType.IntType(), false),
                         new Column("id", new ColumnType.VarcharType(32), false)
                 ))

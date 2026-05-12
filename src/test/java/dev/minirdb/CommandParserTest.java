@@ -1,5 +1,6 @@
 package dev.minirdb;
 
+import dev.minirdb.table.Value;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -26,8 +27,8 @@ class CommandParserTest {
         Command command = CommandParser.parse("insert 1 kim");
 
         Command.Insert insert = assertInstanceOf(Command.Insert.class, command);
-        assertEquals(1, insert.row().id());
-        assertEquals("kim", insert.row().name());
+        assertEquals(new Value.IntValue(1), insert.row().value(0));
+        assertEquals(new Value.VarcharValue("kim"), insert.row().value(1));
     }
 
     @Test
