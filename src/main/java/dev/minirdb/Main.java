@@ -19,46 +19,39 @@ public class Main {
                 break;
             }
 
-            String command = input.trim();
+            try {
+                Command command = CommandParser.parse(input);
 
-            if (command.equals(".exit")) {
-                break;
-            }
-
-            if (command.isEmpty()) {
-                continue;
-            }
-
-            if (command.equals("select")) {
-                for (Row row : table.rows()) {
-                    System.out.println(row.id() + " " + row.name());
+                if (command instanceof Command.Exit) {
+                    break;
                 }
-                continue;
-            }
 
-            if (command.startsWith("insert ")) {
-                String[] parts = command.split("\\s+");
-
-                if (parts.length != 3) {
-                    System.out.println("usage: insert <id> <name>");
+                if (command instanceof Command.Select) {
+                    for (Row row : table.rows()) {
+                        System.out.println(row.id() + " " + row.name());
+                    }
                     continue;
                 }
 
-                int id;
-                try {
-                    id = Integer.parseInt(parts[1]);
-                } catch (NumberFormatException e) {
-                    System.out.println("id must be a number");
+                if (command instanceof Command.Insert insert) {
+                    table.insert(insert.row());
+                    System.out.println("ok");
                     continue;
                 }
-
-                String name = parts[2];
-                table.insert(new Row(id, name));
-                System.out.println("ok");
-                continue;
+            } catch (ParseCommandException e) {
+                handleParseError(e);
             }
+        }
+    }
 
-            System.out.println("unrecognized command: " + command);
+    private static void handleParseError(ParseCommandException e) {
+        switch (e.reason()) {
+            case EMPTY -> {
+                // 빈 입력은 조용히 무시한다.
+            }
+            case INVALID_INSERT_SYNTAX -> System.out.println("usage: insert <id> <name>");
+            case INVALID_ID -> System.out.println("id must be a number: " + e.value());
+            case UNRECOGNIZED -> System.out.println("unrecognized command: " + e.value());
         }
     }
 }
