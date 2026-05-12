@@ -5,14 +5,12 @@ import java.util.Objects;
 /**
  * 테이블 안의 컬럼 하나를 설명한다.
  *
- * 예:
- * - id 컬럼은 정수이고 널을 허용하지 않는다.
- * - name 컬럼은 문자열이고 최대 길이를 가진다.
+ * 컬럼은 이름, 타입, 널 허용 여부를 가진다.
+ * VARCHAR의 최대 길이 같은 타입별 세부 정보는 ColumnType이 가진다.
  */
 public record Column(
         String name,
         ColumnType type,
-        int maxLength,
         boolean nullable
 ) {
     public Column {
@@ -21,18 +19,6 @@ public record Column(
 
         if (name.isBlank()) {
             throw new IllegalArgumentException("column name must not be blank");
-        }
-
-        if (maxLength < 0) {
-            throw new IllegalArgumentException("maxLength must not be negative");
-        }
-
-        if (type == ColumnType.STRING && maxLength == 0) {
-            throw new IllegalArgumentException("string column must have maxLength");
-        }
-
-        if (type == ColumnType.INT && maxLength != 0) {
-            throw new IllegalArgumentException("int column must not have maxLength");
         }
     }
 }

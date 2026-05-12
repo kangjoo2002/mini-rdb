@@ -3,6 +3,7 @@ package dev.minirdb.table;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class SchemaTest {
@@ -12,15 +13,19 @@ class SchemaTest {
 
         assertEquals(2, schema.size());
 
-        assertEquals("id", schema.column(0).name());
-        assertEquals(ColumnType.INT, schema.column(0).type());
-        assertEquals(0, schema.column(0).maxLength());
-        assertEquals(false, schema.column(0).nullable());
+        Column idColumn = schema.column(0);
+        assertEquals("id", idColumn.name());
+        assertInstanceOf(ColumnType.IntType.class, idColumn.type());
+        assertEquals(false, idColumn.nullable());
 
-        assertEquals("name", schema.column(1).name());
-        assertEquals(ColumnType.STRING, schema.column(1).type());
-        assertEquals(32, schema.column(1).maxLength());
-        assertEquals(false, schema.column(1).nullable());
+        Column nameColumn = schema.column(1);
+        assertEquals("name", nameColumn.name());
+
+        ColumnType.VarcharType varcharType =
+                assertInstanceOf(ColumnType.VarcharType.class, nameColumn.type());
+
+        assertEquals(32, varcharType.maxLength());
+        assertEquals(false, nameColumn.nullable());
     }
 
     @Test
@@ -35,23 +40,15 @@ class SchemaTest {
     void rejectsBlankColumnName() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new Column(" ", ColumnType.INT, 0, false)
+                () -> new Column(" ", new ColumnType.IntType(), false)
         );
     }
 
     @Test
-    void rejectsStringColumnWithoutMaxLength() {
+    void rejectsVarcharWithoutPositiveMaxLength() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new Column("name", ColumnType.STRING, 0, false)
-        );
-    }
-
-    @Test
-    void rejectsIntColumnWithMaxLength() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new Column("id", ColumnType.INT, 32, false)
+                () -> new ColumnType.VarcharType(0)
         );
     }
 }

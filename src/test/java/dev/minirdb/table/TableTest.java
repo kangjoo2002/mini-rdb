@@ -3,6 +3,7 @@ package dev.minirdb.table;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 class TableTest {
     @Test
@@ -21,10 +22,15 @@ class TableTest {
         Table table = Table.userTable();
 
         assertEquals(2, table.schema().size());
+
         assertEquals("id", table.schema().column(0).name());
-        assertEquals(ColumnType.INT, table.schema().column(0).type());
+        assertInstanceOf(ColumnType.IntType.class, table.schema().column(0).type());
+
         assertEquals("name", table.schema().column(1).name());
-        assertEquals(ColumnType.STRING, table.schema().column(1).type());
-        assertEquals(32, table.schema().column(1).maxLength());
+
+        ColumnType.VarcharType varcharType =
+                assertInstanceOf(ColumnType.VarcharType.class, table.schema().column(1).type());
+
+        assertEquals(32, varcharType.maxLength());
     }
 }

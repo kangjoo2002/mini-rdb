@@ -24,8 +24,8 @@ public final class Schema {
 
     public static Schema userSchema() {
         return new Schema(List.of(
-                new Column("id", ColumnType.INT, 0, false),
-                new Column("name", ColumnType.STRING, 32, false)
+                new Column("id", new ColumnType.IntType(), false),
+                new Column("name", new ColumnType.VarcharType(32), false)
         ));
     }
 
