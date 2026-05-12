@@ -1,12 +1,15 @@
 package dev.minirdb;
 
+import dev.minirdb.table.Row;
+import dev.minirdb.table.Table;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
 public class Main {
     public static void main(String[] args) throws IOException {
-        Table table = new Table();
+        Table table = Table.userTable();
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
         while (true) {

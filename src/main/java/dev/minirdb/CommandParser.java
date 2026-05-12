@@ -1,5 +1,7 @@
 package dev.minirdb;
 
+import dev.minirdb.table.Row;
+
 /**
  * 사용자가 입력한 문자열을 Command로 바꾼다.
  *

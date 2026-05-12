@@ -1,11 +1,13 @@
 package dev.minirdb;
 
+import dev.minirdb.table.Row;
+
 /**
  * 사용자가 입력한 문자열을 해석한 결과다.
  *
  * 예:
- * - ".exit"       -> Exit
- * - "select"      -> Select
+ * - ".exit"        -> Exit
+ * - "select"       -> Select
  * - "insert 1 kim" -> Insert(Row(1, "kim"))
  */
 public sealed interface Command permits Command.Exit, Command.Select, Command.Insert {
