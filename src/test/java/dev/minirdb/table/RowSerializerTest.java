@@ -77,6 +77,21 @@ class RowSerializerTest {
     }
 
     @Test
+    void deserializesZeroPaddedVarcharBytes() {
+        byte[] bytes = new byte[36];
+
+        ByteBuffer.wrap(bytes, 0, 4).putInt(1);
+
+        byte[] nameBytes = "kim".getBytes(StandardCharsets.UTF_8);
+        System.arraycopy(nameBytes, 0, bytes, 4, nameBytes.length);
+
+        Row restored = RowSerializer.deserialize(schema(), bytes);
+
+        assertEquals(new Value.IntValue(1), restored.value(0));
+        assertEquals(new Value.VarcharValue("kim"), restored.value(1));
+    }
+
+    @Test
     void deserializesBytesToRow() {
         Row row = Row.of(
                 new Value.IntValue(1),
