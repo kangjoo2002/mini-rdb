@@ -19,7 +19,7 @@ class CommandParserTest {
     void parsesSelectCommand() throws ParseCommandException {
         Command command = CommandParser.parse("select");
 
-        assertInstanceOf(Command.Select.class, command);
+        assertInstanceOf(Command.SelectAll.class, command);
     }
 
     @Test
