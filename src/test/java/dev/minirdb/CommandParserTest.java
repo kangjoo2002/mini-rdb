@@ -72,4 +72,39 @@ class CommandParserTest {
         assertEquals(ParseCommandException.Reason.UNRECOGNIZED, e.reason());
         assertEquals("hello", e.value());
     }
+    @Test
+    void parsesSelectWhereIdCommand() throws Exception {
+        Command command = CommandParser.parse("select where id = 7");
+
+        org.junit.jupiter.api.Assertions.assertEquals(new Command.SelectById(7), command);
+    }
+
+    @Test
+    void rejectsInvalidSelectWhereSyntax() {
+        ParseCommandException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                ParseCommandException.class,
+                () -> CommandParser.parse("select where name = kim")
+        );
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ParseCommandException.Reason.INVALID_SELECT_SYNTAX,
+                exception.reason()
+        );
+    }
+
+    @Test
+    void rejectsInvalidSelectWhereIdValue() {
+        ParseCommandException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                ParseCommandException.class,
+                () -> CommandParser.parse("select where id = abc")
+        );
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                ParseCommandException.Reason.INVALID_ID,
+                exception.reason()
+        );
+        org.junit.jupiter.api.Assertions.assertEquals("abc", exception.value());
+    }
+
+
 }
