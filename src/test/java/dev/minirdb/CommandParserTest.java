@@ -76,34 +76,102 @@ class CommandParserTest {
     void parsesSelectWhereIdCommand() throws Exception {
         Command command = CommandParser.parse("select where id = 7");
 
-        org.junit.jupiter.api.Assertions.assertEquals(new Command.SelectById(7), command);
+        org.junit.jupiter.api.Assertions.assertEquals(new Command.SelectWhere(new Command.Condition("id", "7")), command);
     }
 
     @Test
-    void rejectsInvalidSelectWhereSyntax() {
+    void parsesSelectWhereNameCommand() throws Exception {
+        Command command = CommandParser.parse("select where name = kim");
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                new Command.SelectWhere(new Command.Condition("name", "kim")),
+                command
+        );
+    }
+
+    @Test
+    void parsesSelectWhereIdRawValueWithoutParsingIt() throws Exception {
+        Command command = CommandParser.parse("select where id = abc");
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                new Command.SelectWhere(new Command.Condition("id", "abc")),
+                command
+        );
+    }
+
+
+    @Test
+    void parsesUpdateWhereIdSetNameCommand() throws Exception {
+        Command command = CommandParser.parse("update where id = 2 set name = lee");
+
+        org.junit.jupiter.api.Assertions.assertEquals(new Command.Update(new Command.Condition("id", "2"), new Command.Assignment("name", "lee")), command);
+    }
+
+    @Test
+    void parsesDeleteWhereIdCommand() throws Exception {
+        Command command = CommandParser.parse("delete where id = 2");
+
+        org.junit.jupiter.api.Assertions.assertEquals(new Command.Delete(new Command.Condition("id", "2")), command);
+    }
+
+    @Test
+    void rejectsInvalidUpdateSyntax() {
         ParseCommandException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 ParseCommandException.class,
-                () -> CommandParser.parse("select where name = kim")
+                () -> CommandParser.parse("update set name=lee where id = 2")
         );
 
         org.junit.jupiter.api.Assertions.assertEquals(
-                ParseCommandException.Reason.INVALID_SELECT_SYNTAX,
+                ParseCommandException.Reason.INVALID_UPDATE_SYNTAX,
                 exception.reason()
         );
     }
 
     @Test
-    void rejectsInvalidSelectWhereIdValue() {
+    void rejectsInvalidDeleteSyntax() {
         ParseCommandException exception = org.junit.jupiter.api.Assertions.assertThrows(
                 ParseCommandException.class,
-                () -> CommandParser.parse("select where id = abc")
+                () -> CommandParser.parse("delete id = 2")
         );
 
         org.junit.jupiter.api.Assertions.assertEquals(
-                ParseCommandException.Reason.INVALID_ID,
+                ParseCommandException.Reason.INVALID_DELETE_SYNTAX,
                 exception.reason()
         );
-        org.junit.jupiter.api.Assertions.assertEquals("abc", exception.value());
+    }
+
+
+    @Test
+    void parsesGenericSelectWhereCommand() throws Exception {
+        Command command = CommandParser.parse("select where name = kim");
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                new Command.SelectWhere(new Command.Condition("name", "kim")),
+                command
+        );
+    }
+
+    @Test
+    void parsesGenericUpdateCommand() throws Exception {
+        Command command = CommandParser.parse("update where id = 2 set name = lee");
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                new Command.Update(
+                        new Command.Condition("id", "2"),
+                        new Command.Assignment("name", "lee")
+                ),
+                command
+        );
+    }
+
+    @Test
+    void parsesGenericDeleteCommand() throws Exception {
+        Command command = CommandParser.parse("delete where name = kim");
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                new Command.Delete(new Command.Condition("name", "kim")),
+                command
+        );
     }
 
 
