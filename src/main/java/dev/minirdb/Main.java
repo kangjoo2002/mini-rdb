@@ -1,6 +1,6 @@
 package dev.minirdb;
 
-import dev.minirdb.storage.RowFile;
+import dev.minirdb.storage.TableFile;
 import dev.minirdb.table.Column;
 import dev.minirdb.table.ColumnType;
 import dev.minirdb.table.Row;
@@ -21,10 +21,10 @@ public class Main {
                 new Column("name", new ColumnType.VarcharType(32), false)
         ));
 
-        RowFile rowFile = new RowFile(Path.of("mini-rdb.data"), schema);
+        TableFile tableFile = new TableFile(Path.of("mini-rdb.table"), schema);
         Table table = new Table(schema);
 
-        for (Row row : rowFile.readAll()) {
+        for (Row row : tableFile.readAll()) {
             table.insert(row);
         }
 
@@ -59,7 +59,7 @@ public class Main {
 
                 if (command instanceof Command.Insert insert) {
                     table.insert(insert.row());
-                    rowFile.append(insert.row());
+                    tableFile.append(insert.row());
                     System.out.println("ok");
                     continue;
                 }
