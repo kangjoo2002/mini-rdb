@@ -22,7 +22,11 @@ public final class CommandParser {
         }
 
         if (command.equals("select")) {
-            return new Command.Select();
+            return new Command.SelectAll();
+        }
+
+        if (command.startsWith("select ")) {
+            return parseSelect(command);
         }
 
         if (command.startsWith("insert ")) {
@@ -30,6 +34,27 @@ public final class CommandParser {
         }
 
         throw ParseCommandException.unrecognized(command);
+    }
+
+    private static Command parseSelect(String command) throws ParseCommandException {
+        String[] parts = command.split("\\s+");
+
+        if (parts.length != 5
+                || !parts[0].equals("select")
+                || !parts[1].equals("where")
+                || !parts[2].equals("id")
+                || !parts[3].equals("=")) {
+            throw ParseCommandException.invalidSelectSyntax();
+        }
+
+        int id;
+        try {
+            id = Integer.parseInt(parts[4]);
+        } catch (NumberFormatException e) {
+            throw ParseCommandException.invalidId(parts[4]);
+        }
+
+        return new Command.SelectById(id);
     }
 
     private static Command parseInsert(String command) throws ParseCommandException {

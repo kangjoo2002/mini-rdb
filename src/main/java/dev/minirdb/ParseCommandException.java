@@ -7,6 +7,7 @@ public final class ParseCommandException extends Exception {
     public enum Reason {
         EMPTY,
         INVALID_INSERT_SYNTAX,
+        INVALID_SELECT_SYNTAX,
         INVALID_ID,
         UNRECOGNIZED
     }
@@ -25,6 +26,10 @@ public final class ParseCommandException extends Exception {
 
     public static ParseCommandException invalidInsertSyntax() {
         return new ParseCommandException(Reason.INVALID_INSERT_SYNTAX, "");
+    }
+
+    public static ParseCommandException invalidSelectSyntax() {
+        return new ParseCommandException(Reason.INVALID_SELECT_SYNTAX, "");
     }
 
     public static ParseCommandException invalidId(String value) {
