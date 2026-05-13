@@ -13,49 +13,73 @@ import java.util.Objects;
  * 고정 크기 페이지다.
  *
  * 페이지 구조:
- * - header: rowCount 4바이트
- * - row area: 고정 길이 row bytes 배열
+ * - header: slotCount 4바이트
+ * - slot directory: 각 slot이 rowOffset 4바이트를 가진다
+ * - row area: row bytes가 페이지 뒤쪽부터 저장된다
  */
 public final class Page {
     public static final int PAGE_SIZE = 4096;
-    private static final int ROW_COUNT_SIZE = Integer.BYTES;
-    private static final int HEADER_SIZE = ROW_COUNT_SIZE;
+
+    private static final int SLOT_COUNT_SIZE = Integer.BYTES;
+    private static final int HEADER_SIZE = SLOT_COUNT_SIZE;
+    private static final int SLOT_SIZE = Integer.BYTES;
 
     private final Schema schema;
+    private final List<Slot> slots = new ArrayList<>();
     private final List<Row> rows = new ArrayList<>();
 
     public Page(Schema schema) {
         this.schema = Objects.requireNonNull(schema, "schema must not be null");
     }
 
+    public int slotCount() {
+        return slots.size();
+    }
+
     public int rowCount() {
-        return rows.size();
+        return slotCount();
     }
 
     public int maxRowCount() {
-        return (PAGE_SIZE - HEADER_SIZE) / RowSerializer.rowSize(schema);
+        int rowSize = RowSerializer.rowSize(schema);
+        return (PAGE_SIZE - HEADER_SIZE) / (SLOT_SIZE + rowSize);
     }
 
     public boolean hasSpace() {
-        return rowCount() < maxRowCount();
+        return freeSpaceSize() >= SLOT_SIZE + RowSerializer.rowSize(schema);
     }
 
-    public void append(Row row) {
+    public int append(Row row) {
         Objects.requireNonNull(row, "row must not be null");
+
+        byte[] rowBytes = RowSerializer.serialize(schema, row);
 
         if (!hasSpace()) {
             throw new IllegalStateException("page is full");
         }
 
-        // Page는 스키마에 맞는 Row만 내부 상태로 받아야 한다.
-        // 직렬화 가능 여부를 먼저 확인해서 잘못된 Row가 Page에 들어오는 것을 막는다.
-        RowSerializer.serialize(schema, row);
+        int rowOffset = PAGE_SIZE - (rows.size() + 1) * rowBytes.length;
+        int newSlotDirectoryEnd = HEADER_SIZE + (slots.size() + 1) * SLOT_SIZE;
 
+        if (newSlotDirectoryEnd > rowOffset) {
+            throw new IllegalStateException("slot directory overlaps row area");
+        }
+
+        int slotId = slots.size();
+
+        slots.add(new Slot(rowOffset));
         rows.add(row);
+
+        return slotId;
+    }
+
+    public Row read(int slotId) {
+        validateSlotId(slotId);
+        return rows.get(slotId);
     }
 
     public Row row(int index) {
-        return rows.get(index);
+        return read(index);
     }
 
     public List<Row> rows() {
@@ -63,15 +87,23 @@ public final class Page {
     }
 
     public byte[] toBytes() {
-        ByteBuffer buffer = ByteBuffer.allocate(PAGE_SIZE);
+        byte[] bytes = new byte[PAGE_SIZE];
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
 
-        buffer.putInt(rows.size());
+        buffer.putInt(slots.size());
 
-        for (Row row : rows) {
-            buffer.put(RowSerializer.serialize(schema, row));
+        for (Slot slot : slots) {
+            buffer.putInt(slot.rowOffset());
         }
 
-        return buffer.array();
+        for (int i = 0; i < rows.size(); i++) {
+            byte[] rowBytes = RowSerializer.serialize(schema, rows.get(i));
+            int rowOffset = slots.get(i).rowOffset();
+
+            System.arraycopy(rowBytes, 0, bytes, rowOffset, rowBytes.length);
+        }
+
+        return bytes;
     }
 
     public static Page fromBytes(Schema schema, byte[] bytes) {
@@ -85,21 +117,77 @@ public final class Page {
         Page page = new Page(schema);
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
 
-        int rowCount = buffer.getInt();
+        int slotCount = buffer.getInt();
 
-        if (rowCount < 0 || rowCount > page.maxRowCount()) {
-            throw new IllegalStateException("invalid row count: " + rowCount);
+        if (slotCount < 0 || slotCount > page.maxRowCount()) {
+            throw new IllegalStateException("invalid slot count: " + slotCount);
         }
 
         int rowSize = RowSerializer.rowSize(schema);
+        int slotDirectoryEnd = HEADER_SIZE + slotCount * SLOT_SIZE;
 
-        for (int i = 0; i < rowCount; i++) {
+        int[] rowOffsets = new int[slotCount];
+
+        for (int i = 0; i < slotCount; i++) {
+            int rowOffset = buffer.getInt();
+
+            validateRowOffset(rowOffset, rowSize, slotDirectoryEnd, rowOffsets, i);
+
+            rowOffsets[i] = rowOffset;
+        }
+
+        for (int rowOffset : rowOffsets) {
             byte[] rowBytes = new byte[rowSize];
-            buffer.get(rowBytes);
+            System.arraycopy(bytes, rowOffset, rowBytes, 0, rowSize);
 
-            page.append(RowSerializer.deserialize(schema, rowBytes));
+            page.slots.add(new Slot(rowOffset));
+            page.rows.add(RowSerializer.deserialize(schema, rowBytes));
         }
 
         return page;
+    }
+
+    private int freeSpaceSize() {
+        return rowAreaStart() - slotDirectoryEnd();
+    }
+
+    private int slotDirectoryEnd() {
+        return HEADER_SIZE + slots.size() * SLOT_SIZE;
+    }
+
+    private int rowAreaStart() {
+        return PAGE_SIZE - rows.size() * RowSerializer.rowSize(schema);
+    }
+
+    private void validateSlotId(int slotId) {
+        if (slotId < 0 || slotId >= slots.size()) {
+            throw new IndexOutOfBoundsException("invalid slot id: " + slotId);
+        }
+    }
+
+    private static void validateRowOffset(
+            int rowOffset,
+            int rowSize,
+            int slotDirectoryEnd,
+            int[] existingOffsets,
+            int existingCount
+    ) {
+        if (rowOffset < slotDirectoryEnd || rowOffset + rowSize > PAGE_SIZE) {
+            throw new IllegalStateException("invalid row offset: " + rowOffset);
+        }
+
+        for (int i = 0; i < existingCount; i++) {
+            int existingOffset = existingOffsets[i];
+
+            boolean overlaps = rowOffset < existingOffset + rowSize
+                    && existingOffset < rowOffset + rowSize;
+
+            if (overlaps) {
+                throw new IllegalStateException("row areas overlap");
+            }
+        }
+    }
+
+    private record Slot(int rowOffset) {
     }
 }
