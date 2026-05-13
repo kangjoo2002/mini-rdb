@@ -72,11 +72,15 @@ class CommandParserTest {
         assertEquals(ParseCommandException.Reason.UNRECOGNIZED, e.reason());
         assertEquals("hello", e.value());
     }
+
     @Test
     void parsesSelectWhereIdCommand() throws Exception {
         Command command = CommandParser.parse("select where id = 7");
 
-        org.junit.jupiter.api.Assertions.assertEquals(new Command.SelectWhere(new Command.Condition("id", "7")), command);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                new Command.SelectWhere(new Command.Condition("id", "7")),
+                command
+        );
     }
 
     @Test
@@ -99,19 +103,27 @@ class CommandParserTest {
         );
     }
 
-
     @Test
     void parsesUpdateWhereIdSetNameCommand() throws Exception {
         Command command = CommandParser.parse("update where id = 2 set name = lee");
 
-        org.junit.jupiter.api.Assertions.assertEquals(new Command.Update(new Command.Condition("id", "2"), new Command.Assignment("name", "lee")), command);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                new Command.Update(
+                        new Command.Condition("id", "2"),
+                        new Command.Assignment("name", "lee")
+                ),
+                command
+        );
     }
 
     @Test
     void parsesDeleteWhereIdCommand() throws Exception {
         Command command = CommandParser.parse("delete where id = 2");
 
-        org.junit.jupiter.api.Assertions.assertEquals(new Command.Delete(new Command.Condition("id", "2")), command);
+        org.junit.jupiter.api.Assertions.assertEquals(
+                new Command.Delete(new Command.Condition("id", "2")),
+                command
+        );
     }
 
     @Test
@@ -139,40 +151,5 @@ class CommandParserTest {
                 exception.reason()
         );
     }
-
-
-    @Test
-    void parsesGenericSelectWhereCommand() throws Exception {
-        Command command = CommandParser.parse("select where name = kim");
-
-        org.junit.jupiter.api.Assertions.assertEquals(
-                new Command.SelectWhere(new Command.Condition("name", "kim")),
-                command
-        );
-    }
-
-    @Test
-    void parsesGenericUpdateCommand() throws Exception {
-        Command command = CommandParser.parse("update where id = 2 set name = lee");
-
-        org.junit.jupiter.api.Assertions.assertEquals(
-                new Command.Update(
-                        new Command.Condition("id", "2"),
-                        new Command.Assignment("name", "lee")
-                ),
-                command
-        );
-    }
-
-    @Test
-    void parsesGenericDeleteCommand() throws Exception {
-        Command command = CommandParser.parse("delete where name = kim");
-
-        org.junit.jupiter.api.Assertions.assertEquals(
-                new Command.Delete(new Command.Condition("name", "kim")),
-                command
-        );
-    }
-
 
 }

@@ -168,6 +168,7 @@ class TableFileTest {
                 () -> tableFile.read(new RowId(0, 1))
         );
     }
+
     @Test
     void updatesRowByRowId() throws Exception {
         TableFile tableFile = new TableFile(tempDir.resolve("table.data"), schema());
@@ -209,7 +210,6 @@ class TableFileTest {
         assertEquals(List.of(row(2, "lee")), tableFile.readAll());
     }
 
-
     @Test
     void readsAllLocatedRows() throws Exception {
         TableFile tableFile = new TableFile(tempDir.resolve("table.data"), schema());
@@ -239,6 +239,5 @@ class TableFileTest {
 
         assertEquals(List.of(new LocatedRow(secondRowId, second)), tableFile.readAllLocated());
     }
-
 
 }

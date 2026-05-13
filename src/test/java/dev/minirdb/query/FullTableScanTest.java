@@ -106,6 +106,7 @@ class FullTableScanTest {
 
         assertEquals(List.of(row(maxRowsInPage, "kim")), scan.execute(RowPredicate.idEquals(maxRowsInPage)));
     }
+
     @Test
     void returnsLocatedRowsForMatchingPredicate() throws Exception {
         TableFile tableFile = new TableFile(tempDir.resolve("table.data"), schema());
@@ -120,6 +121,5 @@ class FullTableScanTest {
         assertEquals(row(2, "lee"), rows.get(0).row());
         assertEquals(row(2, "lee"), tableFile.read(rows.get(0).rowId()));
     }
-
 
 }

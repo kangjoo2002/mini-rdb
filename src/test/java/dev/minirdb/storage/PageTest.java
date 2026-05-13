@@ -264,6 +264,7 @@ class PageTest {
 
         assertEquals(0, page.slotCount());
     }
+
     @Test
     void updatesRowInPlace() {
         Page page = new Page(schema());
@@ -323,6 +324,5 @@ class PageTest {
         assertEquals(row(2, "lee"), restored.read(secondSlotId));
         assertEquals(List.of(row(2, "lee")), restored.rows());
     }
-
 
 }
