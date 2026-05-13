@@ -146,6 +146,38 @@ class PageTest {
     }
 
     @Test
+    void readsRowThroughSlotOffsetFromPageBytes() {
+        Schema schema = schema();
+        byte[] bytes = new byte[Page.PAGE_SIZE];
+
+        ByteBuffer.wrap(bytes, 0, 4).putInt(1);
+
+        Row row = row(1, "kim");
+        byte[] rowBytes = RowSerializer.serialize(schema, row);
+        int rowOffset = Page.PAGE_SIZE - rowBytes.length;
+
+        ByteBuffer.wrap(bytes, 4, 4).putInt(rowOffset);
+        System.arraycopy(rowBytes, 0, bytes, rowOffset, rowBytes.length);
+
+        Page restored = Page.fromBytes(schema, bytes);
+
+        assertEquals(row, restored.read(0));
+    }
+
+    @Test
+    void toBytesReturnsCopy() {
+        Page page = new Page(schema());
+
+        page.append(row(1, "kim"));
+
+        byte[] bytes = page.toBytes();
+        bytes[0] = 99;
+
+        assertEquals(1, page.slotCount());
+        assertEquals(1, ByteBuffer.wrap(page.toBytes(), 0, 4).getInt());
+    }
+
+    @Test
     void deserializesPageBytesAndReadsRowsBySlotId() {
         Page page = new Page(schema());
 

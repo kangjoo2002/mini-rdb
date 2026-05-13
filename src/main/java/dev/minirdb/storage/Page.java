@@ -16,6 +16,9 @@ import java.util.Objects;
  * - header: slotCount 4바이트
  * - slot directory: 각 slot이 rowOffset 4바이트를 가진다
  * - row area: row bytes가 페이지 뒤쪽부터 저장된다
+ *
+ * Page의 실제 저장 상태는 pageBytes다.
+ * read(slotId)는 반드시 slot -> rowOffset -> pageBytes -> Row 흐름으로 동작한다.
  */
 public final class Page {
     public static final int PAGE_SIZE = 4096;
@@ -25,11 +28,18 @@ public final class Page {
     private static final int SLOT_SIZE = Integer.BYTES;
 
     private final Schema schema;
+    private final byte[] pageBytes;
     private final List<Slot> slots = new ArrayList<>();
-    private final List<Row> rows = new ArrayList<>();
 
     public Page(Schema schema) {
         this.schema = Objects.requireNonNull(schema, "schema must not be null");
+        this.pageBytes = new byte[PAGE_SIZE];
+        writeSlotCount();
+    }
+
+    private Page(Schema schema, byte[] pageBytes) {
+        this.schema = Objects.requireNonNull(schema, "schema must not be null");
+        this.pageBytes = Objects.requireNonNull(pageBytes, "pageBytes must not be null");
     }
 
     public int slotCount() {
@@ -58,7 +68,7 @@ public final class Page {
             throw new IllegalStateException("page is full");
         }
 
-        int rowOffset = PAGE_SIZE - (rows.size() + 1) * rowBytes.length;
+        int rowOffset = PAGE_SIZE - (slots.size() + 1) * rowBytes.length;
         int newSlotDirectoryEnd = HEADER_SIZE + (slots.size() + 1) * SLOT_SIZE;
 
         if (newSlotDirectoryEnd > rowOffset) {
@@ -68,14 +78,24 @@ public final class Page {
         int slotId = slots.size();
 
         slots.add(new Slot(rowOffset));
-        rows.add(row);
+        System.arraycopy(rowBytes, 0, pageBytes, rowOffset, rowBytes.length);
+
+        writeSlotCount();
+        writeSlot(slotId, rowOffset);
 
         return slotId;
     }
 
     public Row read(int slotId) {
         validateSlotId(slotId);
-        return rows.get(slotId);
+
+        int rowSize = RowSerializer.rowSize(schema);
+        int rowOffset = slots.get(slotId).rowOffset();
+
+        byte[] rowBytes = new byte[rowSize];
+        System.arraycopy(pageBytes, rowOffset, rowBytes, 0, rowSize);
+
+        return RowSerializer.deserialize(schema, rowBytes);
     }
 
     public Row row(int index) {
@@ -83,27 +103,17 @@ public final class Page {
     }
 
     public List<Row> rows() {
+        List<Row> rows = new ArrayList<>();
+
+        for (int slotId = 0; slotId < slots.size(); slotId++) {
+            rows.add(read(slotId));
+        }
+
         return List.copyOf(rows);
     }
 
     public byte[] toBytes() {
-        byte[] bytes = new byte[PAGE_SIZE];
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
-
-        buffer.putInt(slots.size());
-
-        for (Slot slot : slots) {
-            buffer.putInt(slot.rowOffset());
-        }
-
-        for (int i = 0; i < rows.size(); i++) {
-            byte[] rowBytes = RowSerializer.serialize(schema, rows.get(i));
-            int rowOffset = slots.get(i).rowOffset();
-
-            System.arraycopy(rowBytes, 0, bytes, rowOffset, rowBytes.length);
-        }
-
-        return bytes;
+        return pageBytes.clone();
     }
 
     public static Page fromBytes(Schema schema, byte[] bytes) {
@@ -114,8 +124,9 @@ public final class Page {
             throw new IllegalArgumentException("page bytes must be exactly " + PAGE_SIZE + " bytes");
         }
 
-        Page page = new Page(schema);
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        byte[] pageBytes = bytes.clone();
+        Page page = new Page(schema, pageBytes);
+        ByteBuffer buffer = ByteBuffer.wrap(pageBytes);
 
         int slotCount = buffer.getInt();
 
@@ -132,19 +143,22 @@ public final class Page {
             int rowOffset = buffer.getInt();
 
             validateRowOffset(rowOffset, rowSize, slotDirectoryEnd, rowOffsets, i);
+            validateReadableRow(schema, pageBytes, rowOffset, rowSize);
 
             rowOffsets[i] = rowOffset;
-        }
-
-        for (int rowOffset : rowOffsets) {
-            byte[] rowBytes = new byte[rowSize];
-            System.arraycopy(bytes, rowOffset, rowBytes, 0, rowSize);
-
             page.slots.add(new Slot(rowOffset));
-            page.rows.add(RowSerializer.deserialize(schema, rowBytes));
         }
 
         return page;
+    }
+
+    private void writeSlotCount() {
+        ByteBuffer.wrap(pageBytes, 0, SLOT_COUNT_SIZE).putInt(slots.size());
+    }
+
+    private void writeSlot(int slotId, int rowOffset) {
+        int slotOffset = HEADER_SIZE + slotId * SLOT_SIZE;
+        ByteBuffer.wrap(pageBytes, slotOffset, SLOT_SIZE).putInt(rowOffset);
     }
 
     private int freeSpaceSize() {
@@ -156,7 +170,7 @@ public final class Page {
     }
 
     private int rowAreaStart() {
-        return PAGE_SIZE - rows.size() * RowSerializer.rowSize(schema);
+        return PAGE_SIZE - slots.size() * RowSerializer.rowSize(schema);
     }
 
     private void validateSlotId(int slotId) {
@@ -186,6 +200,13 @@ public final class Page {
                 throw new IllegalStateException("row areas overlap");
             }
         }
+    }
+
+    private static void validateReadableRow(Schema schema, byte[] pageBytes, int rowOffset, int rowSize) {
+        byte[] rowBytes = new byte[rowSize];
+        System.arraycopy(pageBytes, rowOffset, rowBytes, 0, rowSize);
+
+        RowSerializer.deserialize(schema, rowBytes);
     }
 
     private record Slot(int rowOffset) {
