@@ -210,4 +210,35 @@ class TableFileTest {
     }
 
 
+    @Test
+    void readsAllLocatedRows() throws Exception {
+        TableFile tableFile = new TableFile(tempDir.resolve("table.data"), schema());
+
+        Row first = row(1, "kim");
+        Row second = row(2, "lee");
+
+        RowId firstRowId = tableFile.append(first);
+        RowId secondRowId = tableFile.append(second);
+
+        List<LocatedRow> locatedRows = tableFile.readAllLocated();
+
+        assertEquals(2, locatedRows.size());
+        assertEquals(new LocatedRow(firstRowId, first), locatedRows.get(0));
+        assertEquals(new LocatedRow(secondRowId, second), locatedRows.get(1));
+    }
+
+    @Test
+    void readAllLocatedRowsSkipsDeletedRows() throws Exception {
+        TableFile tableFile = new TableFile(tempDir.resolve("table.data"), schema());
+
+        RowId deletedRowId = tableFile.append(row(1, "kim"));
+        Row second = row(2, "lee");
+        RowId secondRowId = tableFile.append(second);
+
+        tableFile.delete(deletedRowId);
+
+        assertEquals(List.of(new LocatedRow(secondRowId, second)), tableFile.readAllLocated());
+    }
+
+
 }

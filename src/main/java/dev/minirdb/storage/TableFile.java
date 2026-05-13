@@ -87,15 +87,35 @@ public final class TableFile {
     }
 
     public List<Row> readAll() throws IOException {
-        int pageCount = pageCount();
         List<Row> rows = new ArrayList<>();
 
-        for (int pageNumber = 0; pageNumber < pageCount; pageNumber++) {
-            Page page = readPage(pageNumber);
-            rows.addAll(page.rows());
+        for (LocatedRow locatedRow : readAllLocated()) {
+            rows.add(locatedRow.row());
         }
 
         return List.copyOf(rows);
+    }
+
+    public List<LocatedRow> readAllLocated() throws IOException {
+        int pageCount = pageCount();
+        List<LocatedRow> locatedRows = new ArrayList<>();
+
+        for (int pageNumber = 0; pageNumber < pageCount; pageNumber++) {
+            Page page = readPage(pageNumber);
+
+            for (int slotId = 0; slotId < page.slotCount(); slotId++) {
+                try {
+                    locatedRows.add(new LocatedRow(
+                            new RowId(pageNumber, slotId),
+                            page.read(slotId)
+                    ));
+                } catch (IllegalStateException ignored) {
+                    // deleted slot
+                }
+            }
+        }
+
+        return List.copyOf(locatedRows);
     }
 
     public int pageCount() throws IOException {

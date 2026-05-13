@@ -1,5 +1,6 @@
 package dev.minirdb.query;
 
+import dev.minirdb.storage.LocatedRow;
 import dev.minirdb.storage.TableFile;
 import dev.minirdb.table.Row;
 
@@ -23,9 +24,21 @@ public final class FullTableScan {
 
         List<Row> result = new ArrayList<>();
 
-        for (Row row : tableFile.readAll()) {
-            if (predicate.test(row)) {
-                result.add(row);
+        for (LocatedRow locatedRow : executeLocated(predicate)) {
+            result.add(locatedRow.row());
+        }
+
+        return List.copyOf(result);
+    }
+
+    public List<LocatedRow> executeLocated(RowPredicate predicate) throws IOException {
+        Objects.requireNonNull(predicate, "predicate must not be null");
+
+        List<LocatedRow> result = new ArrayList<>();
+
+        for (LocatedRow locatedRow : tableFile.readAllLocated()) {
+            if (predicate.test(locatedRow.row())) {
+                result.add(locatedRow);
             }
         }
 
