@@ -34,6 +34,22 @@ class TableFileTest {
     }
 
     @Test
+    void rejectsNullPath() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new TableFile(null, schema())
+        );
+    }
+
+    @Test
+    void rejectsNullSchema() {
+        assertThrows(
+                NullPointerException.class,
+                () -> new TableFile(tempDir.resolve("table.data"), null)
+        );
+    }
+
+    @Test
     void readsEmptyListWhenFileDoesNotExist() throws Exception {
         TableFile tableFile = new TableFile(tempDir.resolve("table.data"), schema());
 
