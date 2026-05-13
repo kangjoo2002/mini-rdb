@@ -206,7 +206,6 @@ class BufferPoolTest {
         assertEquals(0, pageStore.readCount(0));
     }
 
-
     private static final class FakePageStore implements PageStore {
         private final Map<Integer, Page> pages = new HashMap<>();
         private final Map<Integer, Integer> reads = new HashMap<>();
