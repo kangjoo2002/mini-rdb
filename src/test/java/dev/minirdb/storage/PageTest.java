@@ -3,6 +3,7 @@ package dev.minirdb.storage;
 import dev.minirdb.table.Column;
 import dev.minirdb.table.ColumnType;
 import dev.minirdb.table.Row;
+import dev.minirdb.table.RowSerializer;
 import dev.minirdb.table.Schema;
 import dev.minirdb.table.Value;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,27 +37,54 @@ class PageTest {
     void createsEmptyPage() {
         Page page = new Page(schema());
 
-        assertEquals(0, page.rowCount());
+        assertEquals(0, page.slotCount());
         assertTrue(page.hasSpace());
     }
 
     @Test
-    void calculatesMaxRowCount() {
+    void calculatesMaxRowCountWithSlotOverhead() {
         Page page = new Page(schema());
 
-        assertEquals(113, page.maxRowCount());
+        assertEquals(102, page.maxRowCount());
     }
 
     @Test
-    void appendsRows() {
+    void appendsRowAndReturnsSlotId() {
         Page page = new Page(schema());
 
         Row row = row(1, "kim");
 
-        page.append(row);
+        int slotId = page.append(row);
 
-        assertEquals(1, page.rowCount());
-        assertEquals(row, page.row(0));
+        assertEquals(0, slotId);
+        assertEquals(1, page.slotCount());
+        assertEquals(row, page.read(slotId));
+    }
+
+    @Test
+    void appendsRowsWithDifferentSlotIds() {
+        Page page = new Page(schema());
+
+        Row first = row(1, "kim");
+        Row second = row(2, "lee");
+
+        int firstSlotId = page.append(first);
+        int secondSlotId = page.append(second);
+
+        assertEquals(0, firstSlotId);
+        assertEquals(1, secondSlotId);
+        assertEquals(first, page.read(firstSlotId));
+        assertEquals(second, page.read(secondSlotId));
+    }
+
+    @Test
+    void rejectsInvalidSlotId() {
+        Page page = new Page(schema());
+
+        page.append(row(1, "kim"));
+
+        assertThrows(IndexOutOfBoundsException.class, () -> page.read(-1));
+        assertThrows(IndexOutOfBoundsException.class, () -> page.read(1));
     }
 
     @Test
@@ -70,7 +99,7 @@ class PageTest {
     }
 
     @Test
-    void serializesRowCountInHeader() {
+    void serializesSlotCountInHeader() {
         Page page = new Page(schema());
 
         page.append(row(1, "kim"));
@@ -82,7 +111,7 @@ class PageTest {
     }
 
     @Test
-    void serializesFirstRowAfterHeader() {
+    void serializesSlotDirectoryAfterHeader() {
         Schema schema = schema();
         Page page = new Page(schema);
 
@@ -90,48 +119,79 @@ class PageTest {
         page.append(row);
 
         byte[] bytes = page.toBytes();
-        byte[] expectedRowBytes = dev.minirdb.table.RowSerializer.serialize(schema, row);
+        int rowOffset = ByteBuffer.wrap(bytes, 4, 4).getInt();
+
+        assertEquals(Page.PAGE_SIZE - RowSerializer.rowSize(schema), rowOffset);
+    }
+
+    @Test
+    void serializesRowAtSlotOffset() {
+        Schema schema = schema();
+        Page page = new Page(schema);
+
+        Row row = row(1, "kim");
+        page.append(row);
+
+        byte[] bytes = page.toBytes();
+        int rowOffset = ByteBuffer.wrap(bytes, 4, 4).getInt();
+
+        byte[] expectedRowBytes = RowSerializer.serialize(schema, row);
         byte[] actualRowBytes = Arrays.copyOfRange(
                 bytes,
-                Integer.BYTES,
-                Integer.BYTES + expectedRowBytes.length
+                rowOffset,
+                rowOffset + expectedRowBytes.length
         );
 
-        org.junit.jupiter.api.Assertions.assertArrayEquals(expectedRowBytes, actualRowBytes);
+        assertArrayEquals(expectedRowBytes, actualRowBytes);
     }
 
     @Test
-    void rejectsRowThatDoesNotMatchSchema() {
+    void readsRowThroughSlotOffsetFromPageBytes() {
+        Schema schema = schema();
+        byte[] bytes = new byte[Page.PAGE_SIZE];
+
+        ByteBuffer.wrap(bytes, 0, 4).putInt(1);
+
+        Row row = row(1, "kim");
+        byte[] rowBytes = RowSerializer.serialize(schema, row);
+        int rowOffset = Page.PAGE_SIZE - rowBytes.length;
+
+        ByteBuffer.wrap(bytes, 4, 4).putInt(rowOffset);
+        System.arraycopy(rowBytes, 0, bytes, rowOffset, rowBytes.length);
+
+        Page restored = Page.fromBytes(schema, bytes);
+
+        assertEquals(row, restored.read(0));
+    }
+
+    @Test
+    void toBytesReturnsCopy() {
         Page page = new Page(schema());
 
-        Row invalidRow = Row.of(
-                new Value.VarcharValue("wrong"),
-                new Value.VarcharValue("kim")
-        );
+        page.append(row(1, "kim"));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> page.append(invalidRow)
-        );
+        byte[] bytes = page.toBytes();
+        bytes[0] = 99;
 
-        assertEquals(0, page.rowCount());
+        assertEquals(1, page.slotCount());
+        assertEquals(1, ByteBuffer.wrap(page.toBytes(), 0, 4).getInt());
     }
 
     @Test
-    void deserializesPageBytes() {
+    void deserializesPageBytesAndReadsRowsBySlotId() {
         Page page = new Page(schema());
 
         Row first = row(1, "kim");
         Row second = row(2, "lee");
 
-        page.append(first);
-        page.append(second);
+        int firstSlotId = page.append(first);
+        int secondSlotId = page.append(second);
 
         Page restored = Page.fromBytes(schema(), page.toBytes());
 
-        assertEquals(2, restored.rowCount());
-        assertEquals(first, restored.row(0));
-        assertEquals(second, restored.row(1));
+        assertEquals(2, restored.slotCount());
+        assertEquals(first, restored.read(firstSlotId));
+        assertEquals(second, restored.read(secondSlotId));
     }
 
     @Test
@@ -148,10 +208,23 @@ class PageTest {
     }
 
     @Test
-    void rejectsInvalidRowCountInHeader() {
+    void rejectsInvalidSlotCountInHeader() {
         byte[] bytes = new byte[Page.PAGE_SIZE];
 
-        ByteBuffer.wrap(bytes, 0, 4).putInt(114);
+        ByteBuffer.wrap(bytes, 0, 4).putInt(103);
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> Page.fromBytes(schema(), bytes)
+        );
+    }
+
+    @Test
+    void rejectsInvalidSlotOffset() {
+        byte[] bytes = new byte[Page.PAGE_SIZE];
+
+        ByteBuffer.wrap(bytes, 0, 4).putInt(1);
+        ByteBuffer.wrap(bytes, 4, 4).putInt(1);
 
         assertThrows(
                 IllegalStateException.class,
@@ -173,5 +246,22 @@ class PageTest {
                 IllegalStateException.class,
                 () -> page.append(row(999, "lee"))
         );
+    }
+
+    @Test
+    void rejectsRowThatDoesNotMatchSchema() {
+        Page page = new Page(schema());
+
+        Row invalidRow = Row.of(
+                new Value.VarcharValue("wrong"),
+                new Value.VarcharValue("kim")
+        );
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> page.append(invalidRow)
+        );
+
+        assertEquals(0, page.slotCount());
     }
 }
