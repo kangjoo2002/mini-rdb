@@ -191,6 +191,22 @@ class BufferPoolTest {
         assertEquals(row(1, "lee"), tableFile.read(new RowId(0, 0)));
     }
 
+    @Test
+    void pinsNewPageWithoutReadingFromPageStore() {
+        FakePageStore pageStore = new FakePageStore();
+        BufferPool bufferPool = new BufferPool(1, pageStore);
+
+        Page page = new Page(schema());
+
+        Page pinnedPage = bufferPool.pinNew(0, page);
+
+        assertSame(page, pinnedPage);
+        assertTrue(bufferPool.contains(0));
+        assertEquals(1, bufferPool.pinCount(0));
+        assertEquals(0, pageStore.readCount(0));
+    }
+
+
     private static final class FakePageStore implements PageStore {
         private final Map<Integer, Page> pages = new HashMap<>();
         private final Map<Integer, Integer> reads = new HashMap<>();

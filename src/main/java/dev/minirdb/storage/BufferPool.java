@@ -35,11 +35,27 @@ public final class BufferPool {
             return cachedFrame.page();
         }
 
-        if (frames.size() >= capacity) {
-            throw new IllegalStateException("buffer pool is full");
-        }
+        ensureCapacity();
 
         Page page = pageStore.readPage(pageNumber);
+        BufferFrame frame = new BufferFrame(pageNumber, page);
+        frame.pin();
+
+        frames.put(pageNumber, frame);
+
+        return page;
+    }
+
+    public Page pinNew(int pageNumber, Page page) {
+        validatePageNumber(pageNumber);
+        Objects.requireNonNull(page, "page must not be null");
+
+        if (frames.containsKey(pageNumber)) {
+            throw new IllegalStateException("page is already cached: " + pageNumber);
+        }
+
+        ensureCapacity();
+
         BufferFrame frame = new BufferFrame(pageNumber, page);
         frame.pin();
 
@@ -94,6 +110,12 @@ public final class BufferPool {
 
     public int capacity() {
         return capacity;
+    }
+
+    private void ensureCapacity() {
+        if (frames.size() >= capacity) {
+            throw new IllegalStateException("buffer pool is full");
+        }
     }
 
     private BufferFrame frame(int pageNumber) {

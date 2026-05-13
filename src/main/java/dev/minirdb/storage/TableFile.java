@@ -27,13 +27,17 @@ import static java.nio.file.StandardOpenOption.WRITE;
  *
  * 행 위치는 pageNumber와 slotId의 조합으로 표현한다.
  */
-public final class TableFile implements PageStore {
+public final class TableFile implements PageStore, TableStorage {
     private final Path path;
     private final Schema schema;
 
     public TableFile(Path path, Schema schema) {
         this.path = Objects.requireNonNull(path, "path must not be null");
         this.schema = Objects.requireNonNull(schema, "schema must not be null");
+    }
+
+    public Schema schema() {
+        return schema;
     }
 
     public RowId append(Row row) throws IOException {
