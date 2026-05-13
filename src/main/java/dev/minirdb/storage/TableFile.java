@@ -27,7 +27,7 @@ import static java.nio.file.StandardOpenOption.WRITE;
  *
  * 행 위치는 pageNumber와 slotId의 조합으로 표현한다.
  */
-public final class TableFile {
+public final class TableFile implements PageStore {
     private final Path path;
     private final Schema schema;
 
@@ -132,7 +132,8 @@ public final class TableFile {
         return Math.toIntExact(fileSize / Page.PAGE_SIZE);
     }
 
-    private Page readPage(int pageNumber) throws IOException {
+    @Override
+    public Page readPage(int pageNumber) throws IOException {
         if (pageNumber < 0 || pageNumber >= pageCount()) {
             throw new IndexOutOfBoundsException("invalid page number: " + pageNumber);
         }
@@ -154,7 +155,8 @@ public final class TableFile {
         return Page.fromBytes(schema, buffer.array());
     }
 
-    private void writePage(int pageNumber, Page page) throws IOException {
+    @Override
+    public void writePage(int pageNumber, Page page) throws IOException {
         Objects.requireNonNull(page, "page must not be null");
 
         Path parent = path.getParent();
