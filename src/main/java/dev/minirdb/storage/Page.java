@@ -17,8 +17,8 @@ import java.util.Objects;
  * - slot directory: 각 slot이 rowOffset 4바이트를 가진다
  * - row area: row bytes가 페이지 뒤쪽부터 저장된다
  *
- * Page의 실제 저장 상태는 pageBytes다.
- * read(slotId)는 반드시 slot -> rowOffset -> pageBytes -> Row 흐름으로 동작한다.
+ * 삭제된 slot은 음수로 인코딩한다.
+ * deleted slot encoded value = -(rowOffset + 1)
  */
 public final class Page {
     public static final int PAGE_SIZE = 4096;
@@ -47,7 +47,15 @@ public final class Page {
     }
 
     public int rowCount() {
-        return slotCount();
+        int count = 0;
+
+        for (Slot slot : slots) {
+            if (!slot.deleted()) {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     public int maxRowCount() {
@@ -56,13 +64,25 @@ public final class Page {
     }
 
     public boolean hasSpace() {
-        return freeSpaceSize() >= SLOT_SIZE + RowSerializer.rowSize(schema);
+        return hasDeletedSlot() || freeSpaceSize() >= SLOT_SIZE + RowSerializer.rowSize(schema);
     }
 
     public int append(Row row) {
         Objects.requireNonNull(row, "row must not be null");
 
         byte[] rowBytes = RowSerializer.serialize(schema, row);
+
+        int reusableSlotId = firstDeletedSlotId();
+        if (reusableSlotId >= 0) {
+            Slot deletedSlot = slots.get(reusableSlotId);
+
+            System.arraycopy(rowBytes, 0, pageBytes, deletedSlot.rowOffset(), rowBytes.length);
+
+            slots.set(reusableSlotId, new Slot(deletedSlot.rowOffset(), false));
+            writeSlot(reusableSlotId, slots.get(reusableSlotId));
+
+            return reusableSlotId;
+        }
 
         if (!hasSpace()) {
             throw new IllegalStateException("page is full");
@@ -77,17 +97,17 @@ public final class Page {
 
         int slotId = slots.size();
 
-        slots.add(new Slot(rowOffset));
+        slots.add(new Slot(rowOffset, false));
         System.arraycopy(rowBytes, 0, pageBytes, rowOffset, rowBytes.length);
 
         writeSlotCount();
-        writeSlot(slotId, rowOffset);
+        writeSlot(slotId, slots.get(slotId));
 
         return slotId;
     }
 
     public Row read(int slotId) {
-        validateSlotId(slotId);
+        validateActiveSlotId(slotId);
 
         int rowSize = RowSerializer.rowSize(schema);
         int rowOffset = slots.get(slotId).rowOffset();
@@ -98,6 +118,24 @@ public final class Page {
         return RowSerializer.deserialize(schema, rowBytes);
     }
 
+    public void update(int slotId, Row row) {
+        Objects.requireNonNull(row, "row must not be null");
+        validateActiveSlotId(slotId);
+
+        byte[] rowBytes = RowSerializer.serialize(schema, row);
+        int rowOffset = slots.get(slotId).rowOffset();
+
+        System.arraycopy(rowBytes, 0, pageBytes, rowOffset, rowBytes.length);
+    }
+
+    public void delete(int slotId) {
+        validateActiveSlotId(slotId);
+
+        Slot slot = slots.get(slotId);
+        slots.set(slotId, new Slot(slot.rowOffset(), true));
+        writeSlot(slotId, slots.get(slotId));
+    }
+
     public Row row(int index) {
         return read(index);
     }
@@ -106,7 +144,9 @@ public final class Page {
         List<Row> rows = new ArrayList<>();
 
         for (int slotId = 0; slotId < slots.size(); slotId++) {
-            rows.add(read(slotId));
+            if (!slots.get(slotId).deleted()) {
+                rows.add(read(slotId));
+            }
         }
 
         return List.copyOf(rows);
@@ -140,13 +180,17 @@ public final class Page {
         int[] rowOffsets = new int[slotCount];
 
         for (int i = 0; i < slotCount; i++) {
-            int rowOffset = buffer.getInt();
+            int encodedSlot = buffer.getInt();
+            Slot slot = decodeSlot(encodedSlot);
 
-            validateRowOffset(rowOffset, rowSize, slotDirectoryEnd, rowOffsets, i);
-            validateReadableRow(schema, pageBytes, rowOffset, rowSize);
+            validateRowOffset(slot.rowOffset(), rowSize, slotDirectoryEnd, rowOffsets, i);
 
-            rowOffsets[i] = rowOffset;
-            page.slots.add(new Slot(rowOffset));
+            if (!slot.deleted()) {
+                validateReadableRow(schema, pageBytes, slot.rowOffset(), rowSize);
+            }
+
+            rowOffsets[i] = slot.rowOffset();
+            page.slots.add(slot);
         }
 
         return page;
@@ -156,9 +200,9 @@ public final class Page {
         ByteBuffer.wrap(pageBytes, 0, SLOT_COUNT_SIZE).putInt(slots.size());
     }
 
-    private void writeSlot(int slotId, int rowOffset) {
+    private void writeSlot(int slotId, Slot slot) {
         int slotOffset = HEADER_SIZE + slotId * SLOT_SIZE;
-        ByteBuffer.wrap(pageBytes, slotOffset, SLOT_SIZE).putInt(rowOffset);
+        ByteBuffer.wrap(pageBytes, slotOffset, SLOT_SIZE).putInt(encodeSlot(slot));
     }
 
     private int freeSpaceSize() {
@@ -173,10 +217,44 @@ public final class Page {
         return PAGE_SIZE - slots.size() * RowSerializer.rowSize(schema);
     }
 
-    private void validateSlotId(int slotId) {
+    private boolean hasDeletedSlot() {
+        return firstDeletedSlotId() >= 0;
+    }
+
+    private int firstDeletedSlotId() {
+        for (int i = 0; i < slots.size(); i++) {
+            if (slots.get(i).deleted()) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private void validateActiveSlotId(int slotId) {
         if (slotId < 0 || slotId >= slots.size()) {
             throw new IndexOutOfBoundsException("invalid slot id: " + slotId);
         }
+
+        if (slots.get(slotId).deleted()) {
+            throw new IllegalStateException("slot is deleted: " + slotId);
+        }
+    }
+
+    private static int encodeSlot(Slot slot) {
+        if (slot.deleted()) {
+            return -(slot.rowOffset() + 1);
+        }
+
+        return slot.rowOffset();
+    }
+
+    private static Slot decodeSlot(int encodedSlot) {
+        if (encodedSlot < 0) {
+            return new Slot(-encodedSlot - 1, true);
+        }
+
+        return new Slot(encodedSlot, false);
     }
 
     private static void validateRowOffset(
@@ -209,6 +287,6 @@ public final class Page {
         RowSerializer.deserialize(schema, rowBytes);
     }
 
-    private record Slot(int rowOffset) {
+    private record Slot(int rowOffset, boolean deleted) {
     }
 }

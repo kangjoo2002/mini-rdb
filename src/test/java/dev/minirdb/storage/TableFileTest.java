@@ -168,4 +168,46 @@ class TableFileTest {
                 () -> tableFile.read(new RowId(0, 1))
         );
     }
+    @Test
+    void updatesRowByRowId() throws Exception {
+        TableFile tableFile = new TableFile(tempDir.resolve("table.data"), schema());
+
+        RowId rowId = tableFile.append(row(1, "kim"));
+
+        tableFile.update(rowId, row(1, "lee"));
+
+        assertEquals(row(1, "lee"), tableFile.read(rowId));
+        assertEquals(List.of(row(1, "lee")), tableFile.readAll());
+    }
+
+    @Test
+    void deletesRowByRowId() throws Exception {
+        TableFile tableFile = new TableFile(tempDir.resolve("table.data"), schema());
+
+        RowId firstRowId = tableFile.append(row(1, "kim"));
+        Row second = row(2, "lee");
+        tableFile.append(second);
+
+        tableFile.delete(firstRowId);
+
+        assertThrows(IllegalStateException.class, () -> tableFile.read(firstRowId));
+        assertEquals(List.of(second), tableFile.readAll());
+    }
+
+    @Test
+    void appendReusesDeletedSlot() throws Exception {
+        TableFile tableFile = new TableFile(tempDir.resolve("table.data"), schema());
+
+        RowId deletedRowId = tableFile.append(row(1, "kim"));
+
+        tableFile.delete(deletedRowId);
+
+        RowId reusedRowId = tableFile.append(row(2, "lee"));
+
+        assertEquals(deletedRowId, reusedRowId);
+        assertEquals(row(2, "lee"), tableFile.read(reusedRowId));
+        assertEquals(List.of(row(2, "lee")), tableFile.readAll());
+    }
+
+
 }

@@ -67,6 +67,25 @@ public final class TableFile {
         return page.read(rowId.slotId());
     }
 
+    public void update(RowId rowId, Row row) throws IOException {
+        Objects.requireNonNull(rowId, "rowId must not be null");
+        Objects.requireNonNull(row, "row must not be null");
+
+        Page page = readPage(rowId.pageNumber());
+
+        page.update(rowId.slotId(), row);
+        writePage(rowId.pageNumber(), page);
+    }
+
+    public void delete(RowId rowId) throws IOException {
+        Objects.requireNonNull(rowId, "rowId must not be null");
+
+        Page page = readPage(rowId.pageNumber());
+
+        page.delete(rowId.slotId());
+        writePage(rowId.pageNumber(), page);
+    }
+
     public List<Row> readAll() throws IOException {
         int pageCount = pageCount();
         List<Row> rows = new ArrayList<>();
