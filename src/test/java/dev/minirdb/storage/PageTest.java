@@ -264,4 +264,65 @@ class PageTest {
 
         assertEquals(0, page.slotCount());
     }
+
+    @Test
+    void updatesRowInPlace() {
+        Page page = new Page(schema());
+
+        int slotId = page.append(row(1, "kim"));
+
+        page.update(slotId, row(1, "lee"));
+
+        assertEquals(row(1, "lee"), page.read(slotId));
+        assertEquals(1, page.slotCount());
+        assertEquals(1, page.rowCount());
+    }
+
+    @Test
+    void deletesRowByMarkingSlotDeleted() {
+        Page page = new Page(schema());
+
+        int slotId = page.append(row(1, "kim"));
+
+        page.delete(slotId);
+
+        assertEquals(1, page.slotCount());
+        assertEquals(0, page.rowCount());
+        assertEquals(List.of(), page.rows());
+        assertThrows(IllegalStateException.class, () -> page.read(slotId));
+    }
+
+    @Test
+    void reusesDeletedSlotAndRowSpaceOnAppend() {
+        Page page = new Page(schema());
+
+        int deletedSlotId = page.append(row(1, "kim"));
+        page.delete(deletedSlotId);
+
+        int reusedSlotId = page.append(row(2, "lee"));
+
+        assertEquals(deletedSlotId, reusedSlotId);
+        assertEquals(1, page.slotCount());
+        assertEquals(1, page.rowCount());
+        assertEquals(row(2, "lee"), page.read(reusedSlotId));
+    }
+
+    @Test
+    void preservesDeletedSlotsAfterSerialization() {
+        Page page = new Page(schema());
+
+        int firstSlotId = page.append(row(1, "kim"));
+        int secondSlotId = page.append(row(2, "lee"));
+
+        page.delete(firstSlotId);
+
+        Page restored = Page.fromBytes(schema(), page.toBytes());
+
+        assertEquals(2, restored.slotCount());
+        assertEquals(1, restored.rowCount());
+        assertThrows(IllegalStateException.class, () -> restored.read(firstSlotId));
+        assertEquals(row(2, "lee"), restored.read(secondSlotId));
+        assertEquals(List.of(row(2, "lee")), restored.rows());
+    }
+
 }

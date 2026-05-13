@@ -8,6 +8,8 @@ public final class ParseCommandException extends Exception {
         EMPTY,
         INVALID_INSERT_SYNTAX,
         INVALID_SELECT_SYNTAX,
+        INVALID_UPDATE_SYNTAX,
+        INVALID_DELETE_SYNTAX,
         INVALID_ID,
         UNRECOGNIZED
     }
@@ -30,6 +32,14 @@ public final class ParseCommandException extends Exception {
 
     public static ParseCommandException invalidSelectSyntax() {
         return new ParseCommandException(Reason.INVALID_SELECT_SYNTAX, "");
+    }
+
+    public static ParseCommandException invalidUpdateSyntax() {
+        return new ParseCommandException(Reason.INVALID_UPDATE_SYNTAX, "");
+    }
+
+    public static ParseCommandException invalidDeleteSyntax() {
+        return new ParseCommandException(Reason.INVALID_DELETE_SYNTAX, "");
     }
 
     public static ParseCommandException invalidId(String value) {

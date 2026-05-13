@@ -33,6 +33,14 @@ public final class CommandParser {
             return parseInsert(command);
         }
 
+        if (command.startsWith("update ")) {
+            return parseUpdate(command);
+        }
+
+        if (command.startsWith("delete ")) {
+            return parseDelete(command);
+        }
+
         throw ParseCommandException.unrecognized(command);
     }
 
@@ -42,19 +50,11 @@ public final class CommandParser {
         if (parts.length != 5
                 || !parts[0].equals("select")
                 || !parts[1].equals("where")
-                || !parts[2].equals("id")
                 || !parts[3].equals("=")) {
             throw ParseCommandException.invalidSelectSyntax();
         }
 
-        int id;
-        try {
-            id = Integer.parseInt(parts[4]);
-        } catch (NumberFormatException e) {
-            throw ParseCommandException.invalidId(parts[4]);
-        }
-
-        return new Command.SelectById(id);
+        return new Command.SelectWhere(new Command.Condition(parts[2], parts[4]));
     }
 
     private static Command parseInsert(String command) throws ParseCommandException {
@@ -64,18 +64,51 @@ public final class CommandParser {
             throw ParseCommandException.invalidInsertSyntax();
         }
 
-        int id;
-        try {
-            id = Integer.parseInt(parts[1]);
-        } catch (NumberFormatException e) {
-            throw ParseCommandException.invalidId(parts[1]);
-        }
-
+        int id = parseId(parts[1]);
         String name = parts[2];
 
         return new Command.Insert(Row.of(
                 new Value.IntValue(id),
                 new Value.VarcharValue(name)
         ));
+    }
+
+    private static Command parseUpdate(String command) throws ParseCommandException {
+        String[] parts = command.split("\\s+");
+
+        if (parts.length != 9
+                || !parts[0].equals("update")
+                || !parts[1].equals("where")
+                || !parts[3].equals("=")
+                || !parts[5].equals("set")
+                || !parts[7].equals("=")) {
+            throw ParseCommandException.invalidUpdateSyntax();
+        }
+
+        return new Command.Update(
+                new Command.Condition(parts[2], parts[4]),
+                new Command.Assignment(parts[6], parts[8])
+        );
+    }
+
+    private static Command parseDelete(String command) throws ParseCommandException {
+        String[] parts = command.split("\\s+");
+
+        if (parts.length != 5
+                || !parts[0].equals("delete")
+                || !parts[1].equals("where")
+                || !parts[3].equals("=")) {
+            throw ParseCommandException.invalidDeleteSyntax();
+        }
+
+        return new Command.Delete(new Command.Condition(parts[2], parts[4]));
+    }
+
+    private static int parseId(String value) throws ParseCommandException {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            throw ParseCommandException.invalidId(value);
+        }
     }
 }

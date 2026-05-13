@@ -67,16 +67,55 @@ public final class TableFile {
         return page.read(rowId.slotId());
     }
 
+    public void update(RowId rowId, Row row) throws IOException {
+        Objects.requireNonNull(rowId, "rowId must not be null");
+        Objects.requireNonNull(row, "row must not be null");
+
+        Page page = readPage(rowId.pageNumber());
+
+        page.update(rowId.slotId(), row);
+        writePage(rowId.pageNumber(), page);
+    }
+
+    public void delete(RowId rowId) throws IOException {
+        Objects.requireNonNull(rowId, "rowId must not be null");
+
+        Page page = readPage(rowId.pageNumber());
+
+        page.delete(rowId.slotId());
+        writePage(rowId.pageNumber(), page);
+    }
+
     public List<Row> readAll() throws IOException {
-        int pageCount = pageCount();
         List<Row> rows = new ArrayList<>();
 
-        for (int pageNumber = 0; pageNumber < pageCount; pageNumber++) {
-            Page page = readPage(pageNumber);
-            rows.addAll(page.rows());
+        for (LocatedRow locatedRow : readAllLocated()) {
+            rows.add(locatedRow.row());
         }
 
         return List.copyOf(rows);
+    }
+
+    public List<LocatedRow> readAllLocated() throws IOException {
+        int pageCount = pageCount();
+        List<LocatedRow> locatedRows = new ArrayList<>();
+
+        for (int pageNumber = 0; pageNumber < pageCount; pageNumber++) {
+            Page page = readPage(pageNumber);
+
+            for (int slotId = 0; slotId < page.slotCount(); slotId++) {
+                try {
+                    locatedRows.add(new LocatedRow(
+                            new RowId(pageNumber, slotId),
+                            page.read(slotId)
+                    ));
+                } catch (IllegalStateException ignored) {
+                    // deleted slot
+                }
+            }
+        }
+
+        return List.copyOf(locatedRows);
     }
 
     public int pageCount() throws IOException {
