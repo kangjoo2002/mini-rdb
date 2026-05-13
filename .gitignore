@@ -5,3 +5,4 @@ out/
 .idea/
 .vscode/
 mini-rdb.data
+mini-rdb.table
