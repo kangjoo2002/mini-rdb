@@ -9,8 +9,10 @@ import java.util.Objects;
 /**
  * 디스크 페이지를 메모리 프레임에 캐시한다.
  *
- * 이번 단계에서는 페이지 교체 정책을 구현하지 않는다.
- * 버퍼 풀이 가득 찬 상태에서 새 페이지를 읽으려고 하면 예외를 던진다.
+ * 버퍼 풀이 가득 찼을 때는 pinCount가 0인 페이지 중
+ * 가장 오래 전에 사용된 페이지를 내보낸다.
+ *
+ * 내보낼 페이지가 dirty이면 제거하기 전에 디스크에 먼저 기록한다.
  */
 public final class BufferPool {
     private final int capacity;
@@ -32,10 +34,12 @@ public final class BufferPool {
         BufferFrame cachedFrame = frames.get(pageNumber);
         if (cachedFrame != null) {
             cachedFrame.pin();
+            markRecentlyUsed(pageNumber, cachedFrame);
+
             return cachedFrame.page();
         }
 
-        ensureCapacity();
+        makeRoomIfNeeded();
 
         Page page = pageStore.readPage(pageNumber);
         BufferFrame frame = new BufferFrame(pageNumber, page);
@@ -46,7 +50,7 @@ public final class BufferPool {
         return page;
     }
 
-    public Page pinNew(int pageNumber, Page page) {
+    public Page pinNew(int pageNumber, Page page) throws IOException {
         validatePageNumber(pageNumber);
         Objects.requireNonNull(page, "page must not be null");
 
@@ -54,7 +58,7 @@ public final class BufferPool {
             throw new IllegalStateException("page is already cached: " + pageNumber);
         }
 
-        ensureCapacity();
+        makeRoomIfNeeded();
 
         BufferFrame frame = new BufferFrame(pageNumber, page);
         frame.pin();
@@ -112,10 +116,52 @@ public final class BufferPool {
         return capacity;
     }
 
-    private void ensureCapacity() {
-        if (frames.size() >= capacity) {
-            throw new IllegalStateException("buffer pool is full");
+    private void makeRoomIfNeeded() throws IOException {
+        if (frames.size() < capacity) {
+            return;
         }
+
+        Integer victimPageNumber = findVictimPageNumber();
+
+        if (victimPageNumber == null) {
+            throw new IllegalStateException("buffer pool is full and all pages are pinned");
+        }
+
+        evict(victimPageNumber);
+    }
+
+    private Integer findVictimPageNumber() {
+        for (Map.Entry<Integer, BufferFrame> entry : frames.entrySet()) {
+            if (entry.getValue().pinCount() == 0) {
+                return entry.getKey();
+            }
+        }
+
+        return null;
+    }
+
+    private void evict(int pageNumber) throws IOException {
+        BufferFrame victimFrame = frames.get(pageNumber);
+
+        if (victimFrame == null) {
+            throw new IllegalStateException("page is not cached: " + pageNumber);
+        }
+
+        if (victimFrame.pinCount() > 0) {
+            throw new IllegalStateException("cannot evict pinned page: " + pageNumber);
+        }
+
+        if (victimFrame.dirty()) {
+            pageStore.writePage(victimFrame.pageNumber(), victimFrame.page());
+            victimFrame.clearDirty();
+        }
+
+        frames.remove(pageNumber);
+    }
+
+    private void markRecentlyUsed(int pageNumber, BufferFrame frame) {
+        frames.remove(pageNumber);
+        frames.put(pageNumber, frame);
     }
 
     private BufferFrame frame(int pageNumber) {
