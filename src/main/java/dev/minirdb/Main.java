@@ -2,6 +2,8 @@ package dev.minirdb;
 
 import dev.minirdb.query.FullTableScan;
 import dev.minirdb.query.RowPredicate;
+import dev.minirdb.storage.BufferPool;
+import dev.minirdb.storage.BufferedTableFile;
 import dev.minirdb.storage.LocatedRow;
 import dev.minirdb.storage.TableFile;
 import dev.minirdb.table.Column;
@@ -25,7 +27,9 @@ public class Main {
         ));
 
         TableFile tableFile = new TableFile(Path.of("mini-rdb.table"), schema);
-        FullTableScan fullTableScan = new FullTableScan(tableFile);
+        BufferPool bufferPool = new BufferPool(16, tableFile);
+        BufferedTableFile bufferedTableFile = new BufferedTableFile(tableFile, bufferPool);
+        FullTableScan fullTableScan = new FullTableScan(bufferedTableFile);
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
 
@@ -57,7 +61,7 @@ public class Main {
                 }
 
                 if (command instanceof Command.Insert insert) {
-                    tableFile.append(insert.row());
+                    bufferedTableFile.append(insert.row());
                     System.out.println("ok");
                     continue;
                 }
@@ -68,7 +72,7 @@ public class Main {
                     );
 
                     for (LocatedRow locatedRow : rows) {
-                        tableFile.update(
+                        bufferedTableFile.update(
                                 locatedRow.rowId(),
                                 applyAssignment(schema, locatedRow.row(), update.assignment())
                         );
@@ -84,7 +88,7 @@ public class Main {
                     );
 
                     for (LocatedRow locatedRow : rows) {
-                        tableFile.delete(locatedRow.rowId());
+                        bufferedTableFile.delete(locatedRow.rowId());
                     }
 
                     System.out.println("deleted " + rows.size());
@@ -96,6 +100,8 @@ public class Main {
                 System.out.println(e.getMessage());
             }
         }
+
+        bufferedTableFile.flushAll();
     }
 
     private static boolean matches(Schema schema, Row row, Command.Condition condition) {
