@@ -158,20 +158,6 @@ class BufferPoolTest {
         assertEquals(1, pageStore.writeCount(0));
         assertEquals(1, pageStore.writeCount(1));
     }
-
-    @Test
-    void rejectsNewPageWhenBufferPoolIsFull() throws Exception {
-        FakePageStore pageStore = new FakePageStore();
-        pageStore.put(0, new Page(schema()));
-        pageStore.put(1, new Page(schema()));
-
-        BufferPool bufferPool = new BufferPool(1, pageStore);
-
-        bufferPool.pin(0);
-
-        assertThrows(IllegalStateException.class, () -> bufferPool.pin(1));
-    }
-
     @Test
     void flushWritesPageBackToTableFile() throws Exception {
         Path path = tempDir.resolve("table.data");
@@ -192,7 +178,7 @@ class BufferPoolTest {
     }
 
     @Test
-    void pinsNewPageWithoutReadingFromPageStore() {
+    void pinsNewPageWithoutReadingFromPageStore() throws Exception {
         FakePageStore pageStore = new FakePageStore();
         BufferPool bufferPool = new BufferPool(1, pageStore);
 
@@ -205,6 +191,93 @@ class BufferPoolTest {
         assertEquals(1, bufferPool.pinCount(0));
         assertEquals(0, pageStore.readCount(0));
     }
+
+    @Test
+    void evictsLeastRecentlyUsedUnpinnedCleanPageWhenFull() throws Exception {
+        FakePageStore pageStore = new FakePageStore();
+        pageStore.put(0, new Page(schema()));
+        pageStore.put(1, new Page(schema()));
+        pageStore.put(2, new Page(schema()));
+
+        BufferPool bufferPool = new BufferPool(2, pageStore);
+
+        bufferPool.pin(0);
+        bufferPool.unpin(0);
+
+        bufferPool.pin(1);
+        bufferPool.unpin(1);
+
+        bufferPool.pin(0);
+        bufferPool.unpin(0);
+
+        bufferPool.pin(2);
+
+        assertTrue(bufferPool.contains(0));
+        assertFalse(bufferPool.contains(1));
+        assertTrue(bufferPool.contains(2));
+        assertEquals(0, pageStore.writeCount(1));
+        assertEquals(1, pageStore.readCount(2));
+    }
+
+    @Test
+    void flushesDirtyVictimBeforeEviction() throws Exception {
+        FakePageStore pageStore = new FakePageStore();
+        pageStore.put(0, new Page(schema()));
+        pageStore.put(1, new Page(schema()));
+
+        BufferPool bufferPool = new BufferPool(1, pageStore);
+
+        Page page = bufferPool.pin(0);
+        page.append(row(1, "kim"));
+        bufferPool.markDirty(0);
+        bufferPool.unpin(0);
+
+        bufferPool.pin(1);
+
+        assertFalse(bufferPool.contains(0));
+        assertTrue(bufferPool.contains(1));
+        assertEquals(1, pageStore.writeCount(0));
+        assertEquals(1, pageStore.readCount(1));
+    }
+
+    @Test
+    void doesNotEvictPinnedPageWhenFull() throws Exception {
+        FakePageStore pageStore = new FakePageStore();
+        pageStore.put(0, new Page(schema()));
+        pageStore.put(1, new Page(schema()));
+
+        BufferPool bufferPool = new BufferPool(1, pageStore);
+
+        bufferPool.pin(0);
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> bufferPool.pin(1)
+        );
+
+        assertEquals("buffer pool is full and all pages are pinned", exception.getMessage());
+        assertTrue(bufferPool.contains(0));
+        assertFalse(bufferPool.contains(1));
+    }
+
+    @Test
+    void pinNewEvictsUnpinnedPageWhenFull() throws Exception {
+        FakePageStore pageStore = new FakePageStore();
+        pageStore.put(0, new Page(schema()));
+
+        BufferPool bufferPool = new BufferPool(1, pageStore);
+
+        bufferPool.pin(0);
+        bufferPool.unpin(0);
+
+        bufferPool.pinNew(1, new Page(schema()));
+
+        assertFalse(bufferPool.contains(0));
+        assertTrue(bufferPool.contains(1));
+        assertEquals(0, pageStore.writeCount(0));
+        assertEquals(0, pageStore.readCount(1));
+    }
+
 
     private static final class FakePageStore implements PageStore {
         private final Map<Integer, Page> pages = new HashMap<>();
